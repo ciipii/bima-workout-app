@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bima Fitness Tracker Pro</title>
+    <!-- Web App Manifest for PWA -->
+    <link rel="manifest" href="data:application/manifest+json,{"name":"Bima Workout","short_name":"BimaFit","start_url":".","display":"standalone","background_color":"#0a0a0a","theme_color":"#1971c2"}" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg-main: #f8f9fa;
+            --color-bg-card: #ffffff;
+            --color-bg-secondary: #f1f3f5;
+            --color-text-primary: #1a1a1a;
+            --color-text-secondary: #666666;
+            --color-text-tertiary: #999999;
+            --color-border: #e9ecef;
+            --color-accent: #1971c2;
+            --color-success: #2b8a3e;
+            --color-warning: #e67700;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-bg-main: #0a0a0a;
+                --color-bg-card: #161616;
+                --color-bg-secondary: #252525;
+                --color-text-primary: #f8f9fa;
+                --color-text-secondary: #adb5bd;
+                --color-text-tertiary: #6c757d;
+                --color-border: #2c2c2c;
+                --color-accent: #74c0fc;
+                --color-success: #69db7c;
+                --color-warning: #ffd43b;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--color-bg-main);
+            color: var(--color-text-primary);
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .schedule-wrap { width: 100%; max-width: 600px; }
+
+        .week-header { text-align: center; margin-bottom: 2rem; }
+        .week-header h1 { font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: 8px; }
+        .week-header h2 { font-size: 28px; font-weight: 800; }
+
+        /* Rest Timer Enhanced */
+        #rest-timer-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--color-bg-card);
+            border: 2px solid var(--color-accent);
+            padding: 20px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            text-align: center;
+            width: 280px;
+        }
+        .timer-display { font-size: 42px; font-weight: 800; margin-bottom: 4px; font-family: monospace; color: var(--color-accent); }
+        .timer-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--color-text-tertiary); margin-bottom: 16px; }
+        .timer-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .timer-btn { 
+            padding: 12px; font-size: 14px; border: none; border-radius: 12px; 
+            cursor: pointer; background: var(--color-bg-secondary); color: var(--color-text-primary);
+            font-weight: 700; transition: all 0.2s;
+        }
+        .timer-btn.primary { background: var(--color-accent); color: white; grid-column: span 2; }
+        .timer-btn:active { transform: scale(0.95); }
+
+        /* Progress Bar */
+        .day-progress-container {
+            width: 100%; height: 4px; background: var(--color-bg-secondary);
+            border-radius: 2px; margin-top: 8px; overflow: hidden;
+        }
+        .day-progress-bar { height: 100%; background: var(--color-success); width: 0%; transition: width 0.4s ease; }
+
+        .days-grid { display: flex; flex-direction: column; gap: 16px; }
+
+        .day-card {
+            background: var(--color-bg-card);
+            border: 1px solid var(--color-border);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .day-card.today { border: 2px solid var(--color-accent); }
+
+        .day-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 20px;
+            cursor: pointer;
+        }
+
+        .day-badge {
+            width: 48px; height: 48px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 800; flex-shrink: 0;
+        }
+
+        .badge-push { background: #fff0f0; color: #c92a2a; }
+        .badge-pull { background: #e7f5ff; color: #1971c2; }
+        .badge-legs { background: #ebfbee; color: #2b8a3e; }
+        .badge-skill { background: #f3f0ff; color: #5f3dc4; }
+        .badge-full { background: #fff9db; color: #e67700; }
+        .badge-rest { background: #f8f9fa; color: #495057; }
+
+        .day-info { flex: 1; min-width: 0; }
+        .day-name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .today-tag { font-size: 10px; background: var(--color-accent); color: white; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+        .day-focus { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+
+        .day-body {
+            max-height: 0; overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 0 20px;
+        }
+        .day-card.open .day-body { max-height: 4000px; padding-bottom: 24px; border-top: 1px solid var(--color-border); }
+
+        .phase { margin-top: 24px; }
+        .phase-title {
+            font-size: 11px; font-weight: 800; color: var(--color-text-tertiary);
+            text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+        }
+        .phase-title::after { content: ""; height: 1px; background: var(--color-border); flex: 1; }
+
+        .exercise-item {
+            background: var(--color-bg-secondary);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+            border: 1px solid transparent;
+        }
+        .exercise-item.completed { opacity: 0.6; background: transparent; border-color: var(--color-border); }
+        
+        .ex-main { margin-bottom: 12px; }
+        .ex-name { font-size: 16px; font-weight: 700; }
+        .ex-meta { font-size: 12px; font-weight: 600; color: var(--color-accent); margin-top: 4px; }
+        .ex-note { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; font-style: italic; }
+        
+        .sets-container { display: flex; flex-wrap: wrap; gap: 10px; }
+        .set-pill {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            border: 2px solid var(--color-border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; font-weight: 700;
+            cursor: pointer;
+            background: var(--color-bg-card);
+            transition: all 0.2s;
+        }
+        .set-pill.active {
+            background: var(--color-success);
+            color: white;
+            border-color: var(--color-success);
+            transform: scale(0.9);
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(25, 113, 194, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(25, 113, 194, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(25, 113, 194, 0); }
+        }
+        .next-suggested { border-color: var(--color-accent); animation: pulse 2s infinite; }
+
+        .footer-btns { margin-top: 40px; text-align: center; padding-bottom: 80px; }
+        .reset-btn {
+            background: none; border: 1px solid var(--color-border);
+            color: var(--color-text-tertiary); padding: 12px 24px;
+            border-radius: 12px; cursor: pointer; font-size: 13px; font-weight: 600;
+        }
+
+        .chevron { font-size: 12px; color: var(--color-text-tertiary); transition: transform 0.3s; }
+        .open .chevron { transform: rotate(180deg); }
+
+        .rest-day-content { text-align: center; padding: 20px; color: var(--color-text-secondary); }
+
+        /* Status Offline */
+        #offline-notice {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background: var(--color-warning); color: #000;
+            font-size: 12px; font-weight: 700; text-align: center;
+            padding: 4px; display: none; z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="offline-notice">MODE OFFLINE AKTIF</div>
+
+    <div id="rest-timer-container">
+        <div class="timer-label">ISTIRAHAT</div>
+        <div class="timer-display" id="timer-text">01:30</div>
+        <div class="timer-controls">
+            <button class="timer-btn" onclick="adjustTimer(-15)">-15s</button>
+            <button class="timer-btn" onclick="adjustTimer(15)">+15s</button>
+            <button class="timer-btn primary" onclick="stopTimer()">LANJUT SET!</button>
+        </div>
+    </div>
+
+    <div class="schedule-wrap">
+        <div class="week-header">
+            <h1>Calisthenics • Offline Tracker</h1>
+            <h2>Workout Bima</h2>
+        </div>
+
+        <div class="days-grid" id="days-container"></div>
+
+        <div class="footer-btns">
+            <button class="reset-btn" onclick="clearProgress()">Reset Semua Progress</button>
+        </div>
+    </div>
+
+<script>
+// --- KONFIGURASI DATA ---
+const workoutData = [
+  {
+    id: "senin", name: "Senin", label: "PUSH", badge: "badge-push", focus: "Dada, Bahu, Triceps + Planche",
+    phases: [
+      { title: "Skill", exercises: [{ id: "s1", name: "Planche Lean", sets: 5, reps: "10s", note: "Condong maksimal" }, { id: "s2", name: "PPPU", sets: 4, reps: "8", note: "Kunci protraksi" }] },
+      { title: "Strength", exercises: [{ id: "s3", name: "Pike Push Up", sets: 4, reps: "10" }, { id: "s4", name: "Dips", sets: 4, reps: "10" }] }
+    ]
+  },
+  {
+    id: "selasa", name: "Selasa", label: "PULL", badge: "badge-pull", focus: "Punggung, Biceps + Front Lever",
+    phases: [
+      { title: "Skill", exercises: [{ id: "sl1", name: "Tuck FL Hold", sets: 5, reps: "8s" }] },
+      { title: "Strength", exercises: [{ id: "sl2", name: "Pull Up", sets: 5, reps: "8" }, { id: "sl3", name: "Chin Up", sets: 4, reps: "8" }] }
+    ]
+  },
+  {
+    id: "rabu", name: "Rabu", label: "LEGS", badge: "badge-legs", focus: "Kaki + L-Sit Compression",
+    phases: [
+      { title: "Core", exercises: [{ id: "r1", name: "L-Sit Hold", sets: 5, reps: "10s" }] },
+      { title: "Legs", exercises: [{ id: "r2", name: "Bulgarian Split Squat", sets: 4, reps: "10" }, { id: "r3", name: "Nordic Curl", sets: 3, reps: "6" }] }
+    ]
+  },
+  { id: "kamis", name: "Kamis", label: "SKILL", badge: "badge-skill", focus: "Handstand & Mobility", phases: [{ title: "Skill", exercises: [{ id: "k1", name: "Handstand Wall", sets: 6, reps: "20s" }] }] },
+  { id: "jumat", name: "Jumat", label: "PUSH", badge: "badge-push", focus: "Explosive Push + Muscle Up Prep", phases: [{ title: "Strength", exercises: [{ id: "j1", name: "High Pull Up", sets: 5, reps: "4" }, { id: "j2", name: "Clap Push Up", sets: 4, reps: "8" }] }] },
+  { id: "sabtu", name: "Sabtu", label: "FULL", badge: "badge-full", focus: "Full Body & Dragon Flag", phases: [{ title: "Core", exercises: [{ id: "sb1", name: "Tuck Dragon Flag", sets: 5, reps: "5" }] }] },
+  { id: "minggu", name: "Minggu", label: "REST", badge: "badge-rest", focus: "Recovery Day", isRest: true, content: "Rest total. Hidrasi & Protein tinggi." }
+];
+
+let completedSets = JSON.parse(localStorage.getItem('bima_workout_v3')) || [];
+let timerInterval;
+let timeLeft = 90;
+
+// --- SERVICE WORKER UNTUK OFFLINE (PWA) ---
+// Memperbaiki error pendaftaran di lingkungan pratinjau (sandbox)
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    try {
+        const swCode = `
+            const CACHE_NAME = 'bima-workout-cache-v1';
+            const urlsToCache = [location.href];
+            self.addEventListener('install', event => {
+                event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+            });
+            self.addEventListener('fetch', event => {
+                event.respondWith(caches.match(event.request).then(response => response || fetch(event.request)));
+            });
+        `;
+        const blob = new Blob([swCode], {type: 'application/javascript'});
+        const swUrl = URL.createObjectURL(blob);
+        
+        // Cek apakah bukan di lingkungan googleusercontent agar tidak error saat preview
+        if (!location.hostname.includes('usercontent.goog')) {
+            navigator.serviceWorker.register(swUrl).catch(err => {
+                console.log("ServiceWorker registration skipped: ", err.message);
+            });
+        }
+    } catch (e) {
+        console.log("PWA features not supported in this environment");
+    }
+}
+
+// Deteksi status koneksi
+window.addEventListener('offline', () => document.getElementById('offline-notice').style.display = 'block');
+window.addEventListener('online', () => document.getElementById('offline-notice').style.display = 'none');
+
+// Audio Beep Tanpa File Eksternal
+function playBeep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch(e) { console.log("Audio block by browser"); }
+}
+
+function saveProgress() {
+    localStorage.setItem('bima_workout_v3', JSON.stringify(completedSets));
+    updateAllProgressBars();
+}
+
+function adjustTimer(seconds) {
+    timeLeft = Math.max(0, timeLeft + seconds);
+    updateTimerDisplay();
+}
+
+function startTimer() {
+    document.getElementById('rest-timer-container').style.display = 'block';
+    timeLeft = 90;
+    updateTimerDisplay();
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            document.getElementById('timer-text').innerText = "WAKTUNYA!";
+            playBeep();
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        }
+    }, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    document.getElementById('rest-timer-container').style.display = 'none';
+}
+
+function updateTimerDisplay() {
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
+    document.getElementById('timer-text').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function toggleSet(exId, setNum) {
+    const key = `${exId}-${setNum}`;
+    const idx = completedSets.indexOf(key);
+    if (idx === -1) {
+        completedSets.push(key);
+        startTimer();
+    } else {
+        completedSets.splice(idx, 1);
+    }
+    saveProgress();
+    updateExerciseUI(exId);
+}
+
+function updateExerciseUI(exId) {
+    const exData = findExerciseById(exId);
+    let done = 0;
+    for(let i=1; i<=exData.sets; i++) {
+        const el = document.getElementById(`set-${exId}-${i}`);
+        const isActive = completedSets.includes(`${exId}-${i}`);
+        el.classList.toggle('active', isActive);
+        if(isActive) done++;
+    }
+    document.getElementById(`row-${exId}`).classList.toggle('completed', done === exData.sets);
+    highlightNextSuggested(exId, exData.sets);
+}
+
+function highlightNextSuggested(exId, total) {
+    for(let i=1; i<=total; i++) {
+        const el = document.getElementById(`set-${exId}-${i}`);
+        el.classList.remove('next-suggested');
+    }
+    for(let i=1; i<=total; i++) {
+        if(!completedSets.includes(`${exId}-${i}`)) {
+            document.getElementById(`set-${exId}-${i}`).classList.add('next-suggested');
+            break;
+        }
+    }
+}
+
+function findExerciseById(id) {
+    for (const day of workoutData) {
+        if (day.isRest) continue;
+        for (const phase of day.phases) {
+            const found = phase.exercises.find(e => e.id === id);
+            if (found) return found;
+        }
+    }
+}
+
+function updateAllProgressBars() {
+    workoutData.forEach(day => {
+        if (day.isRest) return;
+        const bar = document.getElementById(`progress-${day.id}`);
+        if(!bar) return;
+        let total = 0;
+        let done = 0;
+        day.phases.forEach(p => p.exercises.forEach(e => {
+            total += e.sets;
+            for(let i=1; i<=e.sets; i++) if(completedSets.includes(`${e.id}-${i}`)) done++;
+        }));
+        bar.style.width = `${(done / total) * 100}%`;
+    });
+}
+
+function clearProgress() {
+    if(confirm("Hapus semua progres minggu ini?")) {
+        completedSets = [];
+        saveProgress();
+        location.reload();
+    }
+}
+
+function render() {
+    const container = document.getElementById('days-container');
+    const today = new Date().getDay();
+    const dayMap = [6, 0, 1, 2, 3, 4, 5]; 
+    const todayIdx = dayMap[today];
+
+    workoutData.forEach((day, idx) => {
+        const isToday = idx === todayIdx;
+        const card = document.createElement('div');
+        card.className = `day-card ${isToday ? 'today open' : ''}`;
+        
+        let bodyContent = day.isRest ? `<div class="rest-day-content">${day.content}</div>` : 
+            day.phases.map(p => `
+                <div class="phase">
+                    <div class="phase-title">${p.title}</div>
+                    ${p.exercises.map(ex => `
+                        <div class="exercise-item" id="row-${ex.id}">
+                            <div class="ex-main">
+                                <div class="ex-name">${ex.name}</div>
+                                <div class="ex-meta">${ex.sets} SETS × ${ex.reps}</div>
+                                ${ex.note ? `<div class="ex-note">${ex.note}</div>` : ''}
+                            </div>
+                            <div class="sets-container">
+                                ${Array.from({length: ex.sets}, (_, i) => i + 1).map(num => `
+                                    <div id="set-${ex.id}-${num}" class="set-pill" onclick="event.stopPropagation(); toggleSet('${ex.id}', ${num})">${num}</div>
+                                `).join('')}
+                            </div>
+                        </div>`).join('')}
+                </div>
+            `).join('');
+
+        card.innerHTML = `
+            <div class="day-header" onclick="this.closest('.day-card').classList.toggle('open')">
+                <div class="day-badge ${day.badge}">${day.label}</div>
+                <div class="day-info">
+                    <div class="day-name">${day.name} ${isToday ? '<span class="today-tag">HARI INI</span>' : ''}</div>
+                    <div class="day-focus">${day.focus}</div>
+                    ${!day.isRest ? `<div class="day-progress-container"><div id="progress-${day.id}" class="day-progress-bar"></div></div>` : ''}
+                </div>
+                <div class="chevron">▼</div>
+            </div>
+            <div class="day-body">${bodyContent}</div>
+        `;
+        container.appendChild(card);
+        if(!day.isRest) day.phases.forEach(p => p.exercises.forEach(ex => updateExerciseUI(ex.id)));
+    });
+    updateAllProgressBars();
+}
+
+window.onload = render;
+</script>
+</body>
+</html>
