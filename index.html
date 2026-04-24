@@ -4,8 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bima Fitness Tracker Pro</title>
-    <!-- Web App Manifest for PWA -->
-    <link rel="manifest" href="data:application/manifest+json,{"name":"Bima Workout","short_name":"BimaFit","start_url":".","display":"standalone","background_color":"#0a0a0a","theme_color":"#1971c2"}" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1971c2">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2554/2554032.png">
+    
+    <!-- Web App Manifest (Inline untuk kemudahan) -->
+    <link rel="manifest" href='data:application/json,{"name":"Bima Workout Pro","short_name":"BimaFit","start_url":"index.html","display":"standalone","background_color":"#0a0a0a","theme_color":"#1971c2","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/2554/2554032.png","sizes":"512x512","type":"image/png"}]}' />
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -202,6 +210,20 @@
             font-size: 12px; font-weight: 700; text-align: center;
             padding: 4px; display: none; z-index: 2000;
         }
+
+        /* PWA Install Button */
+        #install-btn {
+            display: none;
+            background: var(--color-accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            cursor: pointer;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -221,8 +243,10 @@
     <div class="schedule-wrap">
         <div class="week-header">
             <h1>Calisthenics • Offline Tracker</h1>
-            <h2>Workout Bima</h2>
+            <h2>Workout Bima Pro</h2>
         </div>
+
+        <button id="install-btn">Instal Aplikasi di HP</button>
 
         <div class="days-grid" id="days-container"></div>
 
@@ -265,39 +289,52 @@ let completedSets = JSON.parse(localStorage.getItem('bima_workout_v3')) || [];
 let timerInterval;
 let timeLeft = 90;
 
-// --- SERVICE WORKER UNTUK OFFLINE (PWA) ---
-// Memperbaiki error pendaftaran di lingkungan pratinjau (sandbox)
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    try {
-        const swCode = `
-            const CACHE_NAME = 'bima-workout-cache-v1';
-            const urlsToCache = [location.href];
-            self.addEventListener('install', event => {
-                event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
-            });
-            self.addEventListener('fetch', event => {
-                event.respondWith(caches.match(event.request).then(response => response || fetch(event.request)));
-            });
-        `;
-        const blob = new Blob([swCode], {type: 'application/javascript'});
-        const swUrl = URL.createObjectURL(blob);
-        
-        // Cek apakah bukan di lingkungan googleusercontent agar tidak error saat preview
-        if (!location.hostname.includes('usercontent.goog')) {
-            navigator.serviceWorker.register(swUrl).catch(err => {
-                console.log("ServiceWorker registration skipped: ", err.message);
-            });
-        }
-    } catch (e) {
-        console.log("PWA features not supported in this environment");
-    }
+// --- OFFLINE POWER (PWA) ---
+// Perbaikan Error: Hanya jalankan Service Worker jika BUKAN di lingkungan sandbox Google
+const isSandbox = location.hostname.includes('usercontent.goog') || location.protocol === 'blob:';
+
+if ('serviceWorker' in navigator && !isSandbox) {
+    const swCode = `
+        const CACHE_NAME = 'bima-workout-v4';
+        self.addEventListener('install', e => {
+            e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll([location.href])));
+        });
+        self.addEventListener('fetch', e => {
+            e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+        });
+    `;
+    const blob = new Blob([swCode], {type: 'application/javascript'});
+    const swUrl = URL.createObjectURL(blob);
+    
+    navigator.serviceWorker.register(swUrl).catch(err => {
+        // Abaikan error registrasi di lingkungan lokal/preview
+    });
 }
+
+// Fitur Instalasi
+let deferredPrompt;
+const installBtn = document.getElementById('install-btn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.style.display = 'block';
+});
+
+installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') installBtn.style.display = 'none';
+        deferredPrompt = null;
+    }
+});
 
 // Deteksi status koneksi
 window.addEventListener('offline', () => document.getElementById('offline-notice').style.display = 'block');
 window.addEventListener('online', () => document.getElementById('offline-notice').style.display = 'none');
 
-// Audio Beep Tanpa File Eksternal
+// Audio Beep Sederhana
 function playBeep() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -310,7 +347,7 @@ function playBeep() {
         gain.gain.setValueAtTime(0.1, ctx.currentTime);
         osc.start();
         osc.stop(ctx.currentTime + 0.3);
-    } catch(e) { console.log("Audio block by browser"); }
+    } catch(e) {}
 }
 
 function saveProgress() {
@@ -366,25 +403,28 @@ function toggleSet(exId, setNum) {
 
 function updateExerciseUI(exId) {
     const exData = findExerciseById(exId);
+    if(!exData) return;
     let done = 0;
     for(let i=1; i<=exData.sets; i++) {
         const el = document.getElementById(`set-${exId}-${i}`);
         const isActive = completedSets.includes(`${exId}-${i}`);
-        el.classList.toggle('active', isActive);
+        if(el) el.classList.toggle('active', isActive);
         if(isActive) done++;
     }
-    document.getElementById(`row-${exId}`).classList.toggle('completed', done === exData.sets);
+    const row = document.getElementById(`row-${exId}`);
+    if(row) row.classList.toggle('completed', done === exData.sets);
     highlightNextSuggested(exId, exData.sets);
 }
 
 function highlightNextSuggested(exId, total) {
     for(let i=1; i<=total; i++) {
         const el = document.getElementById(`set-${exId}-${i}`);
-        el.classList.remove('next-suggested');
+        if(el) el.classList.remove('next-suggested');
     }
     for(let i=1; i<=total; i++) {
         if(!completedSets.includes(`${exId}-${i}`)) {
-            document.getElementById(`set-${exId}-${i}`).classList.add('next-suggested');
+            const el = document.getElementById(`set-${exId}-${i}`);
+            if(el) el.classList.add('next-suggested');
             break;
         }
     }
@@ -411,7 +451,7 @@ function updateAllProgressBars() {
             total += e.sets;
             for(let i=1; i<=e.sets; i++) if(completedSets.includes(`${e.id}-${i}`)) done++;
         }));
-        bar.style.width = `${(done / total) * 100}%`;
+        bar.style.width = `${total > 0 ? (done / total) * 100 : 0}%`;
     });
 }
 
